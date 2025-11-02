@@ -1,0 +1,135 @@
+Function CallDeepSeekAPI(inputText As String) As String
+  Dim strAPI As String
+  Dim strAPIKey As String
+  Dim strSendTxt As String
+  Dim objHttp As Object
+  Dim intStatusCode As Integer
+  Dim strResponse As String
+  
+  ' API服务地址
+  strAPI = "https://api.baystoneai.cn/v1/chat/completions"
+  
+  ' API密钥：替换为你在API服务平台申请的API Key
+  strAPIKey = "YOUR_API_KEY"
+  If strAPIKey = "" Then
+    MsgBox "Please enter the API key."
+    Exit Function
+  ElseIf Selection.Type <> wdSelectionNormal Then
+    MsgBox "Please select text."
+    Exit Function
+  End If
+  
+  ' API模型名称
+  strSendTxt = "{""model"": ""deepseek-r1-distill-qwen-32b"", " & vbCrLf & _
+             """messages"": [" & vbCrLf & _
+             "   {""role"": ""system"", ""content"": ""You are a helpful assistant.""}, " & vbCrLf & _
+             "   {""role"": ""user"", ""content"": """ & inputText & """}" & vbCrLf & _
+             "], " & vbCrLf & _
+             """max_tokens"": 8192, " & vbCrLf & _
+             """stream"": false" & vbCrLf & _
+             "}"
+  
+  Set objHttp = CreateObject("MSXML2.XMLHTTP")
+  ' 调试用：弹出窗口显示发送报文
+  ' MsgBox strSendTxt, vbInformation, "Debug Info"
+  With objHttp
+    .Open "POST", strAPI, False
+    .setRequestHeader "Content-Type", "application/json"
+    .setRequestHeader "Authorization", "Bearer " & strAPIKey
+    .send strSendTxt
+    intStatusCode = .Status
+    strResponse = .responseText
+  End With
+ 
+  ' 调试用: 弹出窗口显示 API 的响应
+  ' MsgBox "API Response: " & strResponse, vbInformation, "Debug Info"
+ 
+  If intStatusCode = 200 Then
+    CallDeepSeekAPI = strResponse
+  Else
+    CallDeepSeekAPI = "Error: " & intStatusCode & " - " & strResponse
+  End If
+ 
+  Set objHttp = Nothing
+End Function
+
+
+Sub DeepSeekR1()
+  Dim strInputText As String
+  Dim strResponse As String
+  Dim objRegex As Object
+  Dim objReasoningRegex As Object
+  Dim objContentRegex As Object
+  Dim objMatches As Object
+  Dim objReasoningMatches As Object
+  Dim objOriginalSelection As Object
+  Dim strReasoningContent As String
+  Dim strFinalContent As String
+ 
+  ' 保存原始选中的文本
+  Set objOriginalSelection = Selection.Range.Duplicate
+  
+  strInputText = Replace(Replace(Replace(Replace(Replace(Selection.Text, "\", "\\"), vbCrLf, ""), vbCr, ""), vbLf, ""), Chr(34), "\""")
+  strResponse = CallDeepSeekAPI(strInputText)
+  
+  If Left(strResponse, 5) <> "Error" Then
+    ' 创建正则表达式对象来分别匹配推理内容和最终回答
+    Set objReasoningRegex = CreateObject("VBScript.RegExp")
+    With objReasoningRegex
+      .Global = True
+      .MultiLine = True
+      .IgnoreCase = False
+      .Pattern = """reasoning_content"":""(.*?)"""
+    End With
+    
+    Set objContentRegex = CreateObject("VBScript.RegExp")
+    With objContentRegex
+      .Global = True
+      .MultiLine = True
+      .IgnoreCase = False
+      .Pattern = """content"":""(.*?)"""
+    End With
+ 
+    ' 提取推理内容
+    Set objReasoningMatches = objReasoningRegex.Execute(strResponse)
+    If objReasoningMatches.Count > 0 Then
+      strReasoningContent = objReasoningMatches(0).SubMatches(0)
+      strReasoningContent = Replace(strReasoningContent, "\n\n", vbNewLine)
+      strReasoningContent = Replace(strReasoningContent, "\n", vbNewLine)
+      strReasoningContent = Replace(Replace(strReasoningContent, """", Chr(34)), """", Chr(34))
+    End If
+ 
+    ' 提取最终回答
+    Set objMatches = objContentRegex.Execute(strResponse)
+    If objMatches.Count > 0 Then
+      strFinalContent = objMatches(0).SubMatches(0)
+      strFinalContent = Replace(strFinalContent, "\n\n", vbNewLine)
+      strFinalContent = Replace(strFinalContent, "\n", vbNewLine)
+      strFinalContent = Replace(Replace(strFinalContent, """", Chr(34)), """", Chr(34))
+ 
+      ' 取消选中原始文本
+      Selection.Collapse Direction:=wdCollapseEnd
+ 
+      ' 插入推理过程（如果存在）
+      If Len(strReasoningContent) > 0 Then
+        Selection.TypeParagraph
+        Selection.TypeText "推理过程："
+        Selection.TypeParagraph
+        Selection.TypeText strReasoningContent
+        Selection.TypeParagraph
+        Selection.TypeText "最终回答："
+        Selection.TypeParagraph
+      End If
+ 
+      ' 插入最终回答
+      Selection.TypeText strFinalContent
+ 
+      ' 将光标移回原来选中文本的末尾
+      objOriginalSelection.Select
+    Else
+      MsgBox "Failed to parse API response.", vbExclamation
+    End If
+  Else
+    MsgBox strResponse, vbCritical
+  End If
+End Sub
