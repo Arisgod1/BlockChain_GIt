@@ -1,0 +1,31 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>登录</title>
+</head>
+<body>
+    <h2>用户登录</h2>
+
+    {% with messages = get_flashed_messages(with_categories=true) %}
+        {% if messages %}
+            {% for category, message in messages %}
+                <div class="flash {{ category }}">{{ message }}</div>
+            {% endfor %}
+        {% endif %}
+    {% endwith %}
+
+    <form method="POST">
+        <div>
+            <label>用户名:</label>
+            <input type="text" name="username" required>
+        </div>
+        <div>
+            <label>密码:</label>
+            <input type="password" name="password" required>
+        </div>
+        <div>
+            <button type="submit">登录</button>
+        </div>
+    </form>
+</body>
+</html>
